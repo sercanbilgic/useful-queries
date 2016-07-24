@@ -1,0 +1,93 @@
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+--create tuning task with sqlid
+DECLARE
+  my_task_name VARCHAR2(30);
+  my_sqlid CLOB;
+BEGIN
+  my_sqlid:=&sql_id;
+
+  my_task_name := DBMS_SQLTUNE.CREATE_TUNING_TASK(
+                           sql_id => my_sqlid,                           
+                           scope => 'COMPREHENSIVE',
+                           time_limit => 60,
+                           task_name => 'acs_sql_tuning_task',
+                           description => 'Task to tune a query');
+END;
+
+---------------------------------------------------------------------------------------------------------
+
+--create tuning task with sqltext
+DECLARE
+  my_task_name VARCHAR2(30);
+  my_sqltext CLOB;
+BEGIN
+  my_sqltext := 'select B.HSP_SUBENO,
+       B.HSP_MUSTERINO,
+       B.HSP_EKNO,
+       case when  m.mvt_gercektuzel_drm = ''G'' then m.mvt_adi ||'' ''||m.mvt_soyadi 
+            else m.mvt_unvan
+       end adisoyadunvan,
+       b.hsp_bloketutari,
+       b.hsp_bloketipi,
+       b.kayit_zmn,
+       b.hsp_ehacizvd_kod,
+       b.hsp_ehacizhbn,
+       b.cozme_zmn
+  from hsp_bloke b
+  join mvt_musteri m
+    on b.hsp_musterino = m.mvt_musteri_no
+ where b.hsp_blokenedeni     = 106 
+   and b.hsp_islemtipi       = ''C''
+   and b.hsp_islemonaydurumu = ''O''                    
+   and (b.hsp_musterino, b.hsp_ekno) in (select/*+ parallel(h 8)*/ h.hsp_musterino, h.hsp_ekno
+                                          from hsp_107blokelihesap h
+                                        )';
+
+  my_task_name := DBMS_SQLTUNE.CREATE_TUNING_TASK(
+                           sql_text => my_sqltext,
+                           user_name => 'FINARTPROD',
+                           scope => 'COMPREHENSIVE',
+                           time_limit => 60,
+                           task_name => 'acs_sql_tuning_task',
+                           description => 'Task to tune a query');
+END;
+
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+
+--User_name: User under which the CREATE_TUNING_TASK function analyzes the SQL statement.
+--Scope: COMPREHENSIVE which means that the advisor also performs SQL Profiling analysis 
+--Time_limit: Time in seconds that the function can run. 
+
+-- check the task from dba_.. table
+select task_name from dba_advisor_log where owner='FINARTPROD';
+
+--execute job
+Begin
+dbms_sqltune.Execute_tuning_task (task_name => 'acs_sql_tuning_task');
+end;
+
+OR
+
+Execute dbms_sqltune.Execute_tuning_task (task_name => 'acs_sql_tuning_task');
+
+--get report
+select dbms_sqltune.report_tuning_task('acs_sql_tuning_task') from dual;
+
+--drop tuning task
+Begin
+dbms_sqltune.drop_tuning_task('acs_sql_tuning_task');
+end;
+
+--tuning taskı resetle tekrar çalıştırabilmek için
+Begin
+dbms_sqltune.reset_tuning_task('acs_sql_tuning_task');
+end;
+

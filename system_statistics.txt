@@ -1,0 +1,50 @@
+---------------------------------------------------------------------------------------------------
+-----------------------online statistics-----------------------------------------------------------
+---------------------------------------------------------------------------------------------------
+
+select * from v$sysstat s 
+where name in('physical reads','physical read bytes','redo size','consistent gets from cache')
+
+
+---------------------------------------------------------------------------------------------------
+-------------------------online statistics difference ---------------------------------------------
+---------------------------------------------------------------------------------------------------
+
+select t.INST_ID,t.name, t.value, s.value, (t.value - s.value) value_dif
+  from dba_hist_sysstat s, gv$sysstat t
+ where t.name = 'redo synch time'
+   and t.name = s.stat_name
+   and s.snap_id = (select max(snap_id) from dba_hist_snapshot)
+   and t.INST_ID = s.instance_number
+
+select t.INST_ID,t.name, t.value, s.value, (t.value - s.value) value_dif
+  from dba_hist_sysstat s, gv$sysstat t
+ where t.STATISTIC# in(48,49,50,51,9,55,56,57,58,8,11,12,299)
+   and t.name = s.stat_name
+   and s.snap_id = (select max(snap_id) from dba_hist_snapshot)
+   and t.INST_ID = s.instance_number
+
+
+---------------------------------------------------------------------------------------------------
+-----------------------historic statistics difference ---------------------------------------------
+---------------------------------------------------------------------------------------------------
+
+select *
+  from (select t.instance_number,
+               t.snap_id,
+               h.begin_interval_time,
+               ROW_NUMBER() OVER(PARTITION BY s.instance_number, s.snap_id ORDER BY(t.value - s.value) desc) rn,
+               t.stat_name,
+               t.value value1,
+               s.value value2,
+               (t.value - s.value) value_dif
+          from dba_hist_sysstat s, dba_hist_sysstat t, dba_hist_snapshot h
+         where s.stat_name = 'redo synch time' --'DBWR checkpoints'
+           and t.stat_name = s.stat_name
+           and t.snap_id = s.snap_id + 1
+           and t.snap_id = h.snap_id
+           and t.instance_number = s.instance_number
+           and h.instance_number = s.instance_number
+           and t.snap_id >= 95519)
+ where rn <= 6
+ order by instance_number, snap_id desc, rn

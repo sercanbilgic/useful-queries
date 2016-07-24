@@ -1,0 +1,329 @@
+set lines 300
+set pages 100
+col wait_class format a20
+col inst_id format 99
+col rn format 99
+col event_name format a35
+col BEGIN_INTERVAL_TIME format a30
+ 
+
+select *
+  from (select t.instance_number inst_id,
+               e.snap_id,
+               ROW_NUMBER() OVER(PARTITION BY t.instance_number ORDER BY (s.time_waited_micro - t.time_waited_micro) desc) rn,
+               e.begin_interval_time,
+               t.WAIT_CLASS,
+               t.event_name,              
+               (s.total_timeouts - t.total_timeouts) delta_timeouts,
+               (s.total_waits - t.total_waits) delta_waits,
+               (s.time_waited_micro - t.time_waited_micro) delta_time_micro,
+                       (s.time_waited_micro - t.time_waited_micro)/decode((s.total_waits - t.total_waits),0,-1,(s.total_waits - t.total_waits))/1000 avg_wait_ms           
+          from gv$system_event s,
+               dba_hist_system_event t,
+               dba_hist_snapshot     e
+         where t.snap_id = e.snap_id
+           and t.WAIT_CLASS != 'Idle'
+           and t.snap_id =(select max(snap_id) from dba_hist_snapshot)
+           and s.EVENT_ID =t.event_id
+           and s.INST_ID = t.instance_number
+           and (s.time_waited_micro - t.time_waited_micro) > 0
+          and e.instance_number = t.instance_number
+           and t.event_name!='i/o slave wait')
+where rn <= 6
+order by inst_id,snap_id desc, rn;
+
+ 
+
+ 
+
+set lines 300
+set pages 100
+col wait format 9999
+col LAST_CALL_ET format 99999
+col event format a40
+ 
+
+select --BLOCKING_INSTANCE,BLOCKING_session,
+row_wait_obj#,lockwait,
+s.INST_id,sid,serial#,s.sql_id,seconds_in_wait wait,s.LAST_CALL_ET, event,service_name
+from gv$session s, gv$sqlarea a
+where s.sql_id = a.sql_id
+and a.INST_ID = s.INST_ID
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+order by inst_id;
+
+ 
+
+ 
+
+select child_number chnum,OPERATION oper,options opt,object_name obj,object_type type ,depth,cost,CARDINALITY card,bytes
+       cpu_cost,io_cost from v$sql_plan
+where sql_id='5gg0g3r477tdp';
+
+ 
+--5yc0bw41d94cb
+--5gg0g3r477tdp
+--90vuab3jmt460
+
+
+--120q9hzbfs14b
+--6gcnry4pvbsa0
+
+
+select to_char(sql_fulltext) from v$sql
+where sql_id='d3wfcvusdxjdh';
+
+ 
+
+select distinct b.CHILD_NUMBER,b.NAME,b.DATATYPE_STRING,b.LAST_CAPTURED,b.VALUE_STRING
+ from v$sql_bind_capture b
+where sql_id='gf4x9bhkb6qbq';
+
+
+select sql_id,sql_profile,sql_plan_baseline,inst_id from gv$sql where sql_id='1479tm3xrgtz3';
+
+
+select gs.INST_ID,
+       gs.EXECUTIONS exec,
+       gs.sql_id,
+       gs.program_line# prog#,
+       gs.BUFFER_GETS,
+       round(gs.BUFFER_GETS/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "bufget/exec",
+       gs.ELAPSED_TIME/1000000, --microsecond
+       round(gs.ELAPSED_TIME/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "elaptime/exec", --microsecond
+       gs.cpu_time/1000000, --microsecond
+       round(gs.cpu_time/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "cputime/exec"     
+  from gv$sql  gs
+  where sql_id in('6su1cap643p6v','gzdvbt95t43ka')      
+ order by "bufget/exec"  desc;
+
+--159ydy53wb2ta
+--8jnm8zgdbnh56
+
+
+--6su1cap643p6v
+--gzdvbt95t43ka
+
+
+
+DECLARE
+  my_task_name VARCHAR2(30);
+  my_sqltext CLOB;
+BEGIN
+  my_sqltext := 'INSERT /*+ BYPASS_RECURSIVE_CHECK */ INTO "CUSTOMER"."KOC_MV_HEALTH_PROCESS_PERF" SELECT kk.official_form_serial_no, kk.official_form_no, kk.form_ent_date,
+kk.contract_id, kk.version_no, kk.partition_no, kk.agent_title,
+kk.family_code, kk.communication_date, kk.contract_ent_date,
+kk.criteria_date, kk.form_send_date, kk.form_accept_date,
+kk.last_username, kk.last_operation, kk.last_op_date, :"SYS_B_00" table_type,
+kk.quote_id, kk.package_name, kk.agency agent_name,
+koc_hpf_utils3.get_auth_term_start (kk.contract_id,
+kk.version_no,
+kk.partition_no
+) term_start_date
+FROM (SELECT ak.official_form_serial_no, ak.official_form_no, form_ent_date,
+ak.contract_id, ak.version_no, teklif.partition_no,
+ak.agent_role agent_title, ak.family_code,
+ak.communication_date communication_date,
+ak.contract_ent_date contract_ent_date,
+TRUNC (NVL (ak.communication_date, ak.contract_ent_date)
+) criteria_date,
+ak.form_send_date form_send_date,
+ak.form_accept_date form_accept_date,
+DECODE
+(ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_01",
+get_quote_user (ak.official_form_serial_no,
+ak.official_form_no
+)
+),
+ak.userid
+) last_username,
+DECODE (ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_02",
+:"SYS_B_03"
+),
+:"SYS_B_04"
+) last_operation,
+NVL (ak.form_accept_date,
+NVL (ak.form_send_date, ak.communication_date)
+) last_op_date,
+teklif.quote_id, b.package_name,
+LPAD (aa.reference_code, :"SYS_B_05", :"SYS_B_06") || :"SYS_B_07" || bb.title agency
+FROM koc_hpf ak,
+(SELECT kq.contract_id, NVL (kq.version_no, :"SYS_B_08")
++ :"SYS_B_09" version_no, cc.partition_no,
+MAX (kq.quote_id) quote_id
+FROM koc_hpf ak,
+ocq_quotes kq,
+ocq_koc_ocp_partitions_ext cc,
+koc_hpf_status_ref g,
+ocq_koc_ocp_health kh
+WHERE TRUNC (NVL (ak.communication_date, contract_ent_date))
+BETWEEN ADD_MONTHS (TRUNC (SYSDATE), -:"SYS_B_10")
+AND TRUNC (SYSDATE)
+AND ak.official_form_serial_no <> :"SYS_B_11"
+AND kq.contract_id = ak.contract_id
+AND (NVL (kq.version_no, :"SYS_B_12") + :"SYS_B_13") = ak.version_no
+AND cc.quote_id = kq.quote_id
+AND kh.quote_id = cc.quote_id
+AND kh.partition_no = cc.partition_no
+AND NVL (kh.family_code, :"SYS_B_14") =
+NVL (ak.family_code,
+NVL (kh.family_code, :"SYS_B_15")
+)
+AND NVL (kh.version_no, ak.version_no) = ak.version_no
+AND g.hlth_code_status = cc.quote_status
+AND g.status_type IN (:"SYS_B_16", :"SYS_B_17")
+GROUP BY kq.contract_id,
+NVL (kq.version_no, :"SYS_B_18") + :"SYS_B_19",
+cc.partition_no) teklif,
+ocq_koc_ocp_health kh,
+ocq_koc_ocp_risk_packages a,
+koc_oc_packages b,
+dmt_agents aa,
+koc_dmt_agents_ext bb
+WHERE NVL (ak.communication_date, contract_ent_date)
+BETWEEN ADD_MONTHS (TRUNC (SYSDATE), -:"SYS_B_20")
+AND TRUNC (SYSDATE)
+AND ak.official_form_serial_no <> :"SYS_B_21"
+AND teklif.contract_id = ak.contract_id
+AND teklif.version_no = ak.version_no
+AND kh.quote_id = teklif.quote_id
+AND kh.partition_no = teklif.partition_no
+AND NVL (kh.family_code, :"SYS_B_22") =
+NVL (ak.family_code, NVL (kh.family_code, :"SYS_B_23"))
+AND NVL (kh.version_no, ak.version_no) = ak.version_no
+AND a.quote_id = teklif.quote_id
+AND a.partition_no = teklif.partition_no
+AND a.action_code = :"SYS_B_24"
+AND b.package_id = a.package_id
+AND aa.int_id = ak.agent_role
+AND bb.int_id = aa.int_id) kk
+UNION ALL
+SELECT kk.official_form_serial_no, kk.official_form_no, kk.form_ent_date,
+kk.contract_id, kk.version_no, kk.partition_no, kk.agent_title,
+kk.family_code, kk.communication_date, kk.contract_ent_date,
+kk.criteria_date, kk.form_send_date, kk.form_accept_date,
+kk.last_username, kk.last_operation, kk.last_op_date, :"SYS_B_25" table_type,
+NULL quote_id, NULL package_name, kk.agency agent_name,
+koc_hpf_utils3.get_auth_term_start (kk.contract_id,
+kk.version_no,
+kk.partition_no
+) term_start_date
+FROM (SELECT ak.official_form_serial_no, ak.official_form_no, form_ent_date,
+ak.contract_id, ak.version_no, ky.partition_no,
+ak.agent_role agent_title, ak.family_code,
+ak.communication_date communication_date,
+ak.contract_ent_date contract_ent_date,
+TRUNC (NVL (ak.communication_date, ak.contract_ent_date)
+) criteria_date,
+ak.form_send_date form_send_date,
+ak.form_accept_date form_accept_date,
+DECODE
+(ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_26",
+get_quote_user (ak.official_form_serial_no,
+ak.official_form_no
+)
+),
+ak.userid
+) last_username,
+DECODE (ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_27",
+:"SYS_B_28"
+),
+:"SYS_B_29"
+) last_operation,
+NVL (ak.form_accept_date,
+NVL (ak.form_send_date, ak.communication_date)
+) last_op_date,
+LPAD (aa.reference_code, :"SYS_B_30", :"SYS_B_31") || :"SYS_B_32" || bb.title agency
+FROM koc_hpf ak,
+koc_ocp_health ky,
+dmt_agents aa,
+koc_dmt_agents_ext bb
+WHERE TRUNC (NVL (ak.communication_date, contract_ent_date))
+BETWEEN ADD_MONTHS (TRUNC (SYSDATE), -:"SYS_B_33")
+AND TRUNC (SYSDATE)
+AND ak.official_form_serial_no <> :"SYS_B_34"
+AND ky.contract_id = ak.contract_id
+AND NVL (ky.family_code, :"SYS_B_35") =
+NVL (ak.family_code, NVL (ky.family_code, :"SYS_B_36"))
+AND NVL (ky.version_no, ak.version_no) = ak.version_no
+AND aa.int_id = ak.agent_role
+AND bb.int_id = aa.int_id) kk
+UNION ALL
+SELECT kk.official_form_serial_no, kk.official_form_no, kk.form_ent_date,
+kk.contract_id, kk.version_no, kk.partition_no, kk.agent_title,
+kk.family_code, kk.communication_date, kk.contract_ent_date,
+kk.criteria_date, kk.form_send_date, kk.form_accept_date,
+kk.last_username, kk.last_operation, kk.last_op_date, :"SYS_B_37" table_type,
+NULL quote_id, NULL package_name, kk.agency agent_name,
+koc_hpf_utils3.get_auth_term_start (kk.contract_id,
+kk.version_no,
+kk.partition_no
+) term_start_date
+FROM (SELECT ak.official_form_serial_no, ak.official_form_no, form_ent_date,
+ak.contract_id, ak.version_no, ky.partition_no,
+ak.agent_role agent_title, ak.family_code,
+ak.communication_date communication_date,
+ak.contract_ent_date contract_ent_date,
+TRUNC (NVL (ak.communication_date, ak.contract_ent_date)
+) criteria_date,
+ak.form_send_date form_send_date,
+ak.form_accept_date form_accept_date,
+DECODE
+(ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_38",
+get_quote_user (ak.official_form_serial_no,
+ak.official_form_no
+)
+),
+ak.userid
+) last_username,
+DECODE (ak.communication_date,
+NULL, DECODE (ak.contract_ent_date,
+NULL, :"SYS_B_39",
+:"SYS_B_40"
+),
+:"SYS_B_41"
+) last_operation,
+NVL (ak.form_accept_date,
+NVL (ak.form_send_date, ak.communication_date)
+) last_op_date,
+LPAD (aa.reference_code, :"SYS_B_42", :"SYS_B_43") || :"SYS_B_44" || bb.title agency
+FROM koc_hpf ak,
+wip_koc_ocp_health ky,
+dmt_agents aa,
+koc_dmt_agents_ext bb
+WHERE TRUNC (NVL (ak.communication_date, contract_ent_date))
+BETWEEN ADD_MONTHS (TRUNC (SYSDATE), -:"SYS_B_45")
+AND TRUNC (SYSDATE)
+AND ak.official_form_serial_no <> :"SYS_B_46"
+AND ky.contract_id = ak.contract_id
+AND NVL (ky.family_code, :"SYS_B_47") =
+NVL (ak.family_code, NVL (ky.family_code, :"SYS_B_48"))
+AND NVL (ky.version_no, ak.version_no) = ak.version_no
+AND aa.int_id = ak.agent_role
+AND bb.int_id = aa.int_id) kk';
+
+  my_task_name := DBMS_SQLTUNE.CREATE_TUNING_TASK(
+                           sql_text => my_sqltext,
+                           user_name => 'SYS',
+                           scope => 'COMPREHENSIVE',
+                           time_limit => 60,
+                           task_name => 'acs_sql_tuning_task',
+                           description => 'Task to tune a query');
+END;
+
+
+
+
+
+	

@@ -1,0 +1,154 @@
+/********************************************************************/
+V$SESSION_WAIT When a session is waiting on a resource, it can be 
+found waiting on the enqueue wait event,  
+e.g.  SELECT * FROM V$SESSION_WAIT WHERE EVENT = 'enqueue';
+- SID identifier of session holding the lock
+- P1, P2, P3 determine the resource when event = 'enqueue'
+- SECONDS_IN_WAIT gives how long the wait did occurs
+/********************************************************************/
+
+SELECT * FROM gV$SESSION_WAIT WHERE EVENT like 'enq%';
+
+/********************************************************************/
+V$SESSION session information and row locking information
+- SID, SERIAL# identifier of the session
+- LOCKWAIT address of the lock waiting, otherwise null
+- ROW_WAIT_OBJ# object identified of the object we are waiting on 
+  (object_id of dba_objects)
+- ROW_WAIT_FILE#, ROW_WAIT_BLOCK#, ROW_WAIT_ROW# file_id , block_id and 
+  row location within block of the locked row
+/********************************************************************/
+
+select blocking_session,blocking_session_status, row_wait_obj#,
+lockwait,sid,s.SERIAL# sr#,s.SQL_ID,s.LAST_CALL_ET lcall,s.module,s.seconds_in_wait wait,s.event,a.sql_text,s.program,s.machine,s.service_name, s.action
+from gv$session s, v$sqlarea a
+where s.sql_id  = a.sql_id (+)
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+and lockwait is not null
+--and osuser='aturkan'
+--and seconds_in_wait > 1
+
+/********************************************************************/
+V$LOCK list of all the locks in the system
+- SID identifier of session holding the lock
+- TYPE, ID1 and ID2 determine the resource
+- LMODE and REQUEST indicate which queue the session is waiting on, as follows:
+   LMODE > 0, REQUEST = 0 owner
+   LMODE = 0, REQUEST > 0 acquirer
+   LMODE > 0, REQUEST > 0 converter
+- CTIME time since current mode was converted (see Note 223146.1)
+- BLOCK are we blocking another lock
+   BLOCK = 0 non blocking
+   BLOCK = 1 blocking others
+/********************************************************************/
+
+--objectid si 4903973 olan object üzerindeki lock
+select * from v$lock where id1=4903973
+
+--lock oluþturan session LMODE > 0, REQUEST = 0 owner
+select * from gv$lock where lmode > 0 and request=0 and ctime > 10;
+--locký alacak olna session LMODE = 0, REQUEST > 0 acquirer
+select * from gv$lock where lmode = 0 and request>0 and ctime > 10;
+--locký bekleyen session LMODE > 0, REQUEST > 0 converter
+select * from gv$lock where lmode > 0 and request=0 and ctime > 10;
+
+--herhangi bir lock için bekleyen tüm sessionlar
+select event,p1,p2,p3 from gv$session_wait
+  where wait_time = 0 and event like 'enq:%';
+  
+--TX lockdan dolayý bekleyen sessionlar
+select * from gv$lock 
+where type='TX' and request > 0 and ctime > 10;
+
+--TX lock yapýp bekleten sessionlar
+select * from gv$lock 
+where type='TX' and lmode > 0 and ctime > 10;
+
+/********************************************************************/
+
+--tüm nodelarda bekleyen ve bekleten sessionlar
+select g1.inst_id bekleten_instance,g1.sid bekleten_sid,g1.request bekleten_request,g1.ctime bekleten_ctime
+,g2.inst_id bekleyen_instance,g2.sid bekleyen_sid,g2.lmode bekleyen_lmode,g2.ctime bekleyen__ctime,
+g1.id1,g1.id2,t.ID1_TAG,t.id2_tag
+from gv$lock g1,gv$lock g2,v$lock_type t
+where g1.type='TX' and 
+g1.lmode > 0 and g1.ctime > 10 and
+g2.type='TX' and 
+g2.request > 0 and g2.ctime > 10
+and g1.id1=g2.id1 and g1.id2=g2.id2
+and g1.type=t.type;
+
+/********************************************************************/
+
+/********************************************************************/
+DBA_LOCK or DBA_LOCKS   formatted view on V$LOCK (created via 
+$ORACLE_HOME/rdbms/admin/catblock.sql) 
+- SESSION_ID == SID in V$LOCK
+- LOCK_TYPE, LOCK_ID1, LOCK_ID2 formatted value of TYPE, ID1, ID2 from V$LOCK
+- MODE_HELD and MODE_REQUESTED formatted value of LMODE and REQUEST from V$LOCK
+- LAST_CONVERT == CTIME of V$LOCK
+- BLOCKING_OTHERS formatted value of BLOCK from V$LOCK
+/********************************************************************/
+
+/********************************************************************/
+V$TRANSACTION_ENQUEUE subset of V$LOCK for the blocking TX resources only
+(same description as for the V$LOCK view)
+/********************************************************************/
+
+/*
+V$ENQUEUE_LOCK subset of V$LOCK for the system resources only and
+blocked TX resources only. (same description as for the V$LOCK view)
+*/
+
+/********************************************************************/
+DBA_DML_LOCKS subset of the V$LOCK for the DML (TM) locks only 
+(created via $ORACLE_HOME/rdbms/admin/catblock.sql
+ - same description as the DBA_LOCK view)
+/********************************************************************/
+
+/********************************************************************/
+V$LOCKED_OBJECT same info as DBA_DML_LOCKS, but linked with the 
+rollback and session information
+- XIDUSN, XIDSLOT and XIDSQN rollback information to be linked with V$TRANSACTION
+- OBJECT_ID object being locked
+- SESSION_ID session id
+- ORACLE_USERNAME oracle user name
+- OS_USER_NAME OS user name
+- PROCESS OS process id
+- LOCKED_MODE lock mode
+/********************************************************************/
+
+/********************************************************************/
+V$RESOURCE list of all the currently locked resources in the system.
+Each row can be associated with one or more rows in V$LOCK
+- TYPE, ID1 and ID2 determine the resource
+/********************************************************************/
+
+/********************************************************************/
+DBA_DDL_LOCKS has a row for each DDL lock that is being held, and
+one row for each outstanding request for a DDL lock. It is subset of DBA_LOCKS
+same description as the DBA_LOCK view
+/********************************************************************/
+
+/********************************************************************/
+DBA_WAITERS view that retrieve information for each session waiting on a 
+lock (created via $ORACLE_HOME/rdbms/admin/catblock.sql)
+- WAITING_SESSION waiting session
+- HOLDING_SESSION holding session
+- LOCK_TYPE, LOCK_ID1, LOCK_ID2 resource locked
+- MODE_HELD lock type held
+- MODE_REQUESTED lock type requested
+/********************************************************************/
+
+--v$ viewlarýna baktýðý için sadece çalýþtýðý node üzerindeki sessionlara bakýyor
+select * from dba_waiters;
+
+/********************************************************************/
+DBA_BLOCKERS view that gives the blocking sessions (created via 
+$ORACLE_HOME/rdbms/admin/catblock.sql)
+-HOLDING_SESSION holding session
+/********************************************************************/
+
+--v$ viewlarýna baktýðý için sadece çalýþtýðý node üzerindeki sessionlara bakýyor
+select * from dba_blockers;

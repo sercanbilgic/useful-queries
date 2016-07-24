@@ -1,0 +1,67 @@
+select instance_number,metric_name name, m.begin_time, m.end_time, minval, maxval, average
+  from dba_hist_sysmetric_summary m
+ where (lower(metric_name) like '%gc%' or
+        metric_name = 'User Transaction Per Sec' or
+        metric_name = 'Physical Writes Per Sec' or
+        metric_name = 'Redo Generated Per Sec' or
+        metric_name = 'Redo Writes Per Sec' or
+        metric_name = 'Physical Reads Per Sec' or
+        metric_name = 'Logical Reads Per Sec'or
+        metric_name = 'Executions Per Sec' or
+        metric_name = 'Hard Parse Count Per Sec'or
+        metric_name = 'Logons Per Sec')
+   and m.snap_id = 101137 
+ order by name desc,instance_number;
+
+------------------------------------------------------------------------------------------------
+
+select *--metric_name name, m.begin_time, m.end_time, minval, maxval, average
+  from gv$sysmetric m
+ where (lower(metric_name) like 'gc%' or
+       metric_name = 'User Transaction Per Sec' or
+       metric_name = 'Physical Writes Per Sec' or
+       metric_name = 'Redo Writes Per Sec' or
+       metric_name='Physical Reads Per Sec' or
+       metric_name='Logical Reads Per Sec'
+       )
+ order by metric_name desc,m.BEGIN_TIME desc,inst_id;
+
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+
+select metric_name name,m.begin_time,m.end_time,minval,maxval,average
+  from dba_hist_sysmetric_summary m
+ where metric_name = 'Redo Generated Per Sec'
+   and m.snap_id >= 94098--94457
+   and to_char(begin_time,'hh24') between 9 and 17
+order by average desc;
+
+select metric_name name,m.begin_time,m.end_time,minval,maxval,average
+  from dba_hist_sysmetric_summary m
+ where metric_name = 'Physical Writes Per Sec'
+   and m.snap_id >= 94098--94457
+   and to_char(begin_time,'hh24') between 9 and 17
+order by average desc;
+
+
+select * from dba_hist_metric_name m where lower(m.metric_name) like '%cpu%';
+
+
+select metric_name name,m.begin_time,m.end_time,minval,maxval,average
+  from v$sysmetric_summary m
+ where lower(metric_name) like 'gc%'
+order by average desc
+
+
+select *--metric_name name, m.begin_time, m.end_time, minval, maxval, average
+  from v$sysmetric m
+ where (lower(metric_name) like 'gc%' or
+       metric_name = 'User Transaction Per Sec' or
+       metric_name = 'Physical Writes Per Sec' or
+       metric_name = 'Redo Writes Per Sec' or
+       metric_name='Physical Reads Per Sec' or
+       metric_name='Logical Reads Per Sec'
+       )
+ order by m.value desc
+
+

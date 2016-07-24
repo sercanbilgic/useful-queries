@@ -1,0 +1,201 @@
+----########################## çalýþan sqller ve sql istatistikleri#########################-----------
+select gs.INST_ID,
+       gs.module,
+       gs.SQL_TEXT,
+       gs.EXECUTIONS exec,
+       gs.FETCHES fetch,
+       (gs.FETCHES/gs.EXECUTIONS) "fetch/exec",
+       gs.sql_id,
+       gs.program_line# prog#,
+       gs.BUFFER_GETS,
+       round(gs.BUFFER_GETS/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "bufget/exec",
+       gs.disk_reads,
+       round(gs.disk_reads/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "diskread/exec",
+       gs.direct_writes,
+       round(gs.direct_writes/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "diskwrite/exec",
+       gs.ELAPSED_TIME/1000000, --microsecond
+       round(gs.ELAPSED_TIME/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "elaptime/exec", --microsecond
+       gs.cpu_time/1000000, --microsecond
+       round(gs.cpu_time/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "cputime/exec", --microsecond
+       gs.ROWS_PROCESSED,
+       round(gs.ROWS_PROCESSED/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "rowsproc/exec"       
+  from gv$sql  gs
+  where sql_id='1479tm3xrgtz3'      
+ order by "bufget/exec"  desc;
+
+
+--sadeleþtirilmiþ
+
+select gs.INST_ID,
+       gs.module,
+       gs.EXECUTIONS exec,
+       gs.sql_id,
+       gs.BUFFER_GETS,
+       round(gs.BUFFER_GETS/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "bufget/exec",
+       gs.ELAPSED_TIME/1000000 elaptime, --microsecond
+       round(gs.ELAPSED_TIME/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "elaptime/exec", --microsecond
+       gs.cpu_time/1000000 cputime, --microsecond
+       round(gs.cpu_time/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0)/1000000 "cputime/exec", --microsecond
+       round(gs.ROWS_PROCESSED/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) "rowsproc/exec"       
+  from gv$sql  gs  
+   where round(gs.BUFFER_GETS/decode(gs.EXECUTIONS,0,-1,gs.EXECUTIONs),0) > 10000 and 
+         parsing_schema_name not like '%COGNOS%'  
+ order by "bufget/exec";
+
+select gs.INST_ID,
+       gs.module,
+       gs.sql_id,
+       sum(gs.EXECUTIONS) exec_total,
+       sum(gs.BUFFER_GETS)/sum(gs.EXECUTIONS) "bufget/exec"
+  from gv$sql  gs  
+   where parsing_schema_name not like '%COGNOS%'  
+ group by gs.INST_ID,
+       gs.module,
+       gs.sql_id
+having sum(gs.EXECUTIONS) > 0 and sum(gs.BUFFER_GETS)/sum(gs.EXECUTIONS) > 100000
+ order by exec_total;
+
+----########## çalýþan sqller ve sql istatistikleri(objectnin dependent larý ile birlikte) #####-----------
+
+select gs.INST_ID,
+       gs.module,
+       gs.SQL_TEXT,
+       gs.EXECUTIONS exec,
+       gs.sql_id,
+       gs.program_line# prog#,
+       gs.BUFFER_GETS,
+       round(gs.BUFFER_GETS / decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs),
+             0) "bufget/exec",
+       gs.disk_reads,
+       round(gs.disk_reads / decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs), 0) "diskread/exec",
+       gs.direct_writes,
+       round(gs.direct_writes / decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs),
+             0) "diskwrite/exec",
+       gs.ELAPSED_TIME / 1000000, --microsecond
+       round(gs.ELAPSED_TIME / decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs),
+             0) / 1000000 "elaptime/exec", --microsecond
+       gs.cpu_time / 1000000, --microsecond
+       round(gs.cpu_time / decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs), 0) /
+       1000000 "cputime/exec", --microsecond
+       gs.ROWS_PROCESSED,
+       round(gs.ROWS_PROCESSED /
+             decode(gs.EXECUTIONS, 0, -1, gs.EXECUTIONs),
+             0) "rowsproc/exec"
+  from gv$sql gs
+ where --module like '%BKRBATCH%'
+ program_id in
+ (select object_id
+    from dba_objects
+   where object_name in
+         (select d.object_name
+            from public_dependency p, dba_objects o, dba_objects d
+           where p.object_id = o.object_id
+             and p.referenced_object_id = d.object_id
+             and o.OWNER != 'SYS'
+             and o.OBJECT_TYPE in ('PROCEDURE')
+             and d.OWNER != 'SYS'
+             and d.OBJECT_TYPE in ('PROCEDURE')
+             and level = 1
+          connect by prior p.referenced_object_id = p.object_id
+          -- start with p.object_id = 1219335
+           start with p.object_id =
+                      (select object_id
+                         from dba_objects
+                        where object_name = 'BKR_BAT_BIREYSELGUNLUKREES_SP') --1356253
+          ))
+--and program_line#=49      
+ order by "bufget/exec" desc;
+
+
+----##########################bir sqlin farklý snaplerdeki istatistikleri#########################-----------
+select distinct --a.sample_time,
+       gs.snap_id,
+       gs.module,
+       h.begin_interval_time,
+       gs.EXECUTIONS_delta,
+       gs.fetches_delta,
+       gs.fetches_delta/gs.executions_delta "fetch/exec",
+       gs.sql_id,
+       gs.BUFFER_GETS_delta,
+       round(gs.BUFFER_GETS_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "bufget/exec",
+       gs.disk_reads_delta,
+       round(gs.disk_reads_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskread/exec",
+       gs.DIRECT_WRITES_DELTA,
+       round(gs.DIRECT_WRITES_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskwrite/exec",
+       gs.ELAPSED_TIME_DELTA,
+       round(gs.ELAPSED_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "elaptime/exec",
+       gs.CPU_TIME_DELTA,
+       round(gs.CPU_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "cputime/exec",
+       gs.ROWS_PROCESSED_DELTA,
+       round(gs.ROWS_PROCESSED_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta ),0) "rowsproc/exec"       
+  from dba_hist_sqlstat gs,dba_hist_snapshot h 
+  where h.snap_id = gs.snap_id
+        and h.instance_number = 1          
+        and gs.instance_number=1                                   
+        and sql_id='6ymjbu68gagq2'
+ order by gs.snap_id desc;
+
+----##########################herhangi bir snapte çalýþan sqller ve sql istatistikleri#########################-----------
+select gs.instance_number,
+       gs.snap_id,
+       gs.module,
+       gs.EXECUTIONS_delta,
+       gs.fetches_delta,
+       gs.fetches_delta/gs.executions_delta "fetch/exec",
+       gs.sql_id,
+       gs.BUFFER_GETS_delta,
+       round(gs.BUFFER_GETS_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "bufget/exec",
+       gs.disk_reads_delta,
+       round(gs.disk_reads_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskread/exec",
+       gs.DIRECT_WRITES_DELTA,
+       round(gs.DIRECT_WRITES_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskwrite/exec",
+       gs.ELAPSED_TIME_DELTA,
+       round(gs.ELAPSED_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "elaptime/exec",
+       gs.CPU_TIME_DELTA,
+       round(gs.CPU_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "cputime/exec",
+       gs.ROWS_PROCESSED_DELTA,
+       round(gs.ROWS_PROCESSED_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta ),0) "rowsproc/exec"       
+  from --gv$sql  gs
+       dba_hist_sqlstat gs,dba_hist_snapshot sh
+  where program_id = (select object_id from dba_objects where object_name= 'BKR_BAT_BIREYSELGUNLUKREES_SP')
+        --gs.module='JOB_APR_DEL_TRANSACTIONEOD_SP' 
+        --and to_date(gs.LAST_LOAD_TIME,'yyyy-mm-dd/hh24:mi:ss') > to_date('2009-10-22 20:00:00','yyyy-mm-dd/hh24:mi:ss')
+        and sh.begin_interval_time between to_date('22/10/2009 22:00','dd.mm.yyyy hh24:mi') and to_date('22/10/2009 22:30','dd.mm.yyyy hh24:mi')
+        and sh.snap_id= gs.snap_id
+        and sh.instance_number=5
+ order by "bufget/exec" desc;
+
+----##########################herhangi bir snapte bir sample_time için çalýþan sqller ve sql istatistikleri#########################-----------
+
+select distinct --a.sample_time,
+       --gs.snap_id,
+       gs.module,
+       gs.EXECUTIONS_delta,
+       gs.fetches_delta,
+       gs.fetches_delta/gs.executions_delta "fetch/exec",
+       gs.sql_id,
+       gs.BUFFER_GETS_delta,
+       round(gs.BUFFER_GETS_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "bufget/exec",
+       gs.disk_reads_delta,
+       round(gs.disk_reads_delta/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskread/exec",
+       gs.DIRECT_WRITES_DELTA,
+       round(gs.DIRECT_WRITES_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "diskwrite/exec",
+       gs.ELAPSED_TIME_DELTA,
+       round(gs.ELAPSED_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "elaptime/exec",
+       gs.CPU_TIME_DELTA,
+       round(gs.CPU_TIME_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta),0) "cputime/exec",
+       gs.ROWS_PROCESSED_DELTA,
+       round(gs.ROWS_PROCESSED_DELTA/decode(gs.executions_delta,0,-1,gs.executions_delta ),0) "rowsproc/exec"       
+  from --gv$sql  gs
+       dba_hist_sqlstat gs,dba_hist_snapshot sh,dba_hist_active_sess_history a
+  where sh.snap_id between 53089 and 53090 
+        and sh.snap_id= gs.snap_id
+        and a.snap_id = gs.snap_id 
+        and sh.instance_number=1   
+        and gs.instance_number=1 
+        and a.instance_number=1 
+        and a.module is not null  
+        and a.sample_time between 
+        to_date('24.02.2010 11:30:00', 'dd.mm.yyyy hh24:mi:ss') and
+        to_date('24.02.2010 11:35:00', 'dd.mm.yyyy hh24:mi:ss')
+ order by "bufget/exec" desc; 

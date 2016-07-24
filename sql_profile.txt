@@ -1,0 +1,68 @@
+--create tuning task
+DECLARE
+  my_task_name VARCHAR2(30);
+  my_sqltext CLOB;
+BEGIN
+  my_sqltext := 'select * from ad_10637_1 where hsp_musterino=2621996';
+
+  my_task_name := DBMS_SQLTUNE.CREATE_TUNING_TASK(
+                           sql_text => my_sqltext,
+                           user_name => 'FINARTPROD',
+                           scope => 'COMPREHENSIVE',
+                           time_limit => 60,
+                           task_name => 'acs_sql_tuning_task',
+                           description => 'Task to tune a query');
+END;
+
+--drop tuning task
+Begin
+dbms_sqltune.drop_tuning_task('acs_sql_tuning_task');
+end;
+
+--tuning taský resetle tekrar çalýþtýrabilmek için
+Begin
+dbms_sqltune.reset_tuning_task('acs_sql_tuning_task');
+end;
+
+
+--execute job
+Begin
+dbms_sqltune.Execute_tuning_task (task_name => 'acs_sql_tuning_task');
+end;
+
+OR
+
+Execute dbms_sqltune.Execute_tuning_task (task_name => 'acs_sql_tuning_task');
+
+--report recommendations
+select dbms_sqltune.report_tuning_task('acs_sql_tuning_task') from dual
+
+-- get sql profiles
+select * from dba_sql_profiles
+--
+select * from v$parameter where name = 'sqltune_category'
+-- aþaðýdaki haklar gerekli
+"create any sql profile","drop any sql profile","alter any sql profile"
+
+
+-- create sql profile
+DECLARE
+ my_sqlprofile_name VARCHAR2(30);
+BEGIN
+ my_sqlprofile_name := DBMS_SQLTUNE.ACCEPT_SQL_PROFILE ( 
+    task_name => 'acs_sql_tuning_task',
+    name      => 'TEST_SQL_PROFILE');
+END;
+
+--alter sql profile
+BEGIN
+  DBMS_SQLTUNE.ALTER_SQL_PROFILE(
+     name            => 'TEST_SQL_PROFILE', 
+     attribute_name  => 'STATUS', 
+     value           => 'DISABLED');
+END;
+
+--drop sql profile
+BEGIN
+  DBMS_SQLTUNE.DROP_SQL_PROFILE(name => 'TEST_SQL_PROFILE');
+END;

@@ -1,0 +1,73 @@
+--------------- sql ifadesi olmayanlar
+
+select/*+ ordered*/ p.spid, session_id, cpu, pga_memory,physical_reads,m.LOGICAL_READS,PGA_USED_MEM,PGA_ALLOC_MEM,PGA_MAX_MEM,s.module,p.program,s.sql_id--,sql_text
+  from v$session s,v$sessmetric m, v$process p--,v$sql q
+ where s.sid = m.session_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.addr = s.paddr
+   --and s.sql_id = q.sql_id(+) 
+   --and child_number=0
+ order by cpu desc;
+
+--------------- v$sql'den object sini alarak
+
+select/*+ ordered*/ p.spid, session_id, cpu, pga_memory,physical_reads,m.LOGICAL_READS,PGA_USED_MEM,PGA_ALLOC_MEM,PGA_MAX_MEM,o.name "MODULE",p.program,s.sql_id,sql_text
+  from v$session s,v$sessmetric m, v$process p,v$sql q,sys.obj$ o
+ where s.sid = m.session_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.addr = s.paddr
+   and s.sql_id = q.sql_id(+) 
+   and child_number=0
+   and o.obj#(+) = q.PROGRAM_ID
+ order by physical_reads desc;
+
+-------------- sql ifadesi olanlar
+
+select/*+ ordered*/ p.spid, session_id, cpu, pga_memory,physical_reads,m.LOGICAL_READS,PGA_USED_MEM,PGA_ALLOC_MEM,PGA_MAX_MEM,s.module,p.program,s.sql_id,sql_text
+  from v$session s,v$sessmetric m, v$process p,v$sql q
+ where s.sid = m.session_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.addr = s.paddr
+   and s.sql_id = q.sql_id(+) 
+   and child_number=0
+ order by cpu desc;
+
+
+-------------- modüle göre grupla --------------------------
+
+-------- version 1
+
+select /*+ ordered*/
+ o.name "MODULE",
+ sum(cpu),
+ sum(pga_memory),
+ sum(physical_reads),
+ sum(m.LOGICAL_READS),
+ sum(PGA_USED_MEM),
+ sum(PGA_ALLOC_MEM),
+ sum(PGA_MAX_MEM)
+  from v$session s, v$sessmetric m, v$process p, v$sql q, sys.obj$ o
+ where s.sid = m.session_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.addr = s.paddr
+   and s.sql_id = q.sql_id(+)
+   and child_number = 0
+   and o.obj# = q.PROGRAM_ID
+group by o.name     
+order by 2 desc
+
+-------- version 2
+select/*+ ordered*/ s.module, sum(cpu), sum(pga_memory),sum(physical_reads),sum(m.LOGICAL_READS),sum(PGA_USED_MEM),sum(PGA_ALLOC_MEM),sum(PGA_MAX_MEM)
+  from v$session s,v$sessmetric m, v$process p--,v$sql q
+ where s.sid = m.session_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.addr = s.paddr
+ group by s.MODULE
+ order by 2 desc
+
+

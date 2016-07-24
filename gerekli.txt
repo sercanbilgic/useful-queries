@@ -1,0 +1,563 @@
+--##################################
+Ñ##active sesions##
+--##################################
+
+select --blocking_session,blocking_session_status, row_wait_obj#,lockwait,
+sid,s.SERIAL# sr#,s.SQL_ID,s.LAST_CALL_ET lcall,s.module,s.seconds_in_wait wait,s.event,a.sql_text,s.program,s.machine,s.service_name, s.action
+from v$session s, v$sqlarea a
+where s.sql_id  = a.sql_id (+)
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+--and osuser='aturkan'
+--and seconds_in_wait > 1;
+
+----------------------------------------------------------------------------
+
+select --blocking_session,blocking_session_status, 
+row_wait_obj#,lockwait,
+sid,s.SERIAL# sr#,s.SQL_ID,seconds_in_wait wait,s.LAST_CALL_ET lcall,s.module,s.seconds_in_wait wait,s.event
+from v$session s, v$sqlarea a
+where s.sql_id  = a.sql_id (+)
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+--and osuser='aturkan'
+--and seconds_in_wait > 1;
+
+
+-----------------------------------------------------------------------------
+
+set lines 300
+set pages 100
+col wait format 9999
+col LAST_CALL_ET format 99999
+col event format a40
+
+select --BLOCKING_INSTANCE,BLOCKING_session,
+row_wait_obj#,lockwait, 
+s.INST_id,sid,serial#,s.sql_id,seconds_in_wait wait,s.LAST_CALL_ET, event,service_name
+from gv$session s, gv$sqlarea a
+where s.sql_id = a.sql_id(+) 
+and s.INST_ID = a.INST_ID(+)
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+order by inst_id;
+
+-----------------------------------------------------------------------------
+-------------- connection count with application name ---------------------------
+-----------------------------------------------------------------------------
+select terminal,count(*)
+ from gv$session 
+where (terminal like '%APP%' or terminal like '%ATM%')
+--and terminal='FAAPP27'
+group by terminal
+order by count(*) desc
+
+
+--------------------------------------------
+----------active session history------------
+--------------------------------------------
+
+select sample_id,sample_time,SESSION_ID,sql_id, event,p1,p2,p3,wait_time,time_waited,
+       current_obj#,current_file#,module,blocking_session,session_state
+from v$active_session_history
+where session_id=360
+
+-------------------------------------------------------
+-------------------during problemÑÑÑÑÑÑÑÑÑÑÑ
+-------------------------------------------------------
+--listener çalisiyor mu
+ps -ef |grep LISTENER_FINART04
+
+--database açildi mi
+ps -ef |grep pmon
+
+-- session sayilari
+
+select inst_id,count(*) 
+ from gv$session
+-- where status='ACTIVE'
+group by inst_id 
+
+--crs loglari
+
+cd /oracle/product/crs/css/log
+ls –lrt
+tail -f ocssd5.log
+
+--crs 'i kapat
+
+/etc/init.d/init.crs stop
+
+--Starts node-level applications on a particular node
+
+srvctl stop nodeapps -n finart01
+srvctl start nodeapps -n finart01
+
+--Starts instances in the cluster database
+srvctl start instance -d <db_name -i <inst_name_list> [-o <start_options>] [-c <connect_str> | -q]
+srvctl stop instance -d <name -i <inst_name_list> [-o <stop_options>] [-c <connect_str> | -q]
+srvctl stop instance -d FADB -i fadb5
+
+--service ac kapa
+srvctl start service -d fadb -s FADB1
+
+
+--To start or stop your entire cluster database, that is, all of the instances and its enabled services
+
+srvctl start database -d <name [-o <stop_options>] [-c <connect_str> | -q]
+
+srvctl stop database -d <name [-o <stop_options>] [-c <connect_str> | -q]
+
+
+-------------------------------------------------------
+--------------  pga kapladýðý alan        -------------
+-------------------------------------------------------
+select inst_id,sum(pga_alloc_mem) from gv$process
+ group by inst_id
+order by sum(pga_alloc_mem) desc 
+
+
+-------------------------------------------------------
+--------------  indexed columnsý           -------------
+-------------------------------------------------------
+
+select d.table_name, d.index_name, column_name,column_position
+  from dba_ind_columns d
+ where d.table_name in ('BKR_HESAP')
+order by table_name,index_name,column_position;
+
+
+-------------------------------------------------------
+--------- sql plan for a sql and bind capture ---------
+-------------------------------------------------------
+
+alter session set "_cursor_plan_unparse_enabled"=false;
+
+select child_number chnum,OPERATION oper,options opt,object_name obj,object_type type ,depth,cost,CARDINALITY card,bytes
+       cpu_cost,io_cost,access_predicates,filter_predicates from v$sql_plan
+where sql_id='70u0mm0rcxs4q';
+
+select * from v$sql
+where sql_id='09a3tyj67aygt';
+
+select distinct b.CHILD_NUMBER,b.NAME,b.DATATYPE_STRING,b.LAST_CAPTURED,b.VALUE_STRING 
+ from v$sql_bind_capture b
+where sql_id='gf4x9bhkb6qbq';
+
+--####################################################################
+--########### su anda aktif olan session lar ve processler ###########
+--####################################################################
+
+select s.sid,
+	   s.SERIAL#,
+	   s.SQL_ID,
+	   s.osuser,
+	   s.username,
+	   s.program,
+	   s.machine,
+	   s.event,
+	   a.sql_text,
+	   s.service_name,
+	   s.module,
+	   s.action,
+	   s.last_call_et,
+	   p.*
+  from v$session s, v$sqlarea a ,v$process p
+ where s.sql_id = a.sql_id
+   and s.status = 'ACTIVE'
+   and s.type != 'BACKGROUND'
+   and p.spid=14014
+   and s.PADDR=p.ADDR
+--and seconds_in_wait > 1
+
+-------------------------------------------------------------------------------------
+--------------  which object buffer takes how much space on cache        ------------
+-------------------------------------------------------------------------------------
+
+select object_name,objd,count(*) from v$bh ,dba_objects d where d.data_object_id = objd
+group by object_name,objd
+order by count(*) desc
+
+
+-------------------------------------------------------
+--------------     outlines               -------------
+-------------------------------------------------------
+
+select o.ol_name,hint#,hint_text,table_name from outln.ol$hints o;
+
+begin
+dbms_outln.refresh_outline_cache();
+end;
+
+
+--################################################
+Ñ##active sessions on all nodes##
+--################################################
+
+select s.inst_id,sid,serial#,s.sql_id,s.LAST_CALL_ET,username, program,machine, event,sql_text,service_name, s.module, s.ACTION
+from gv$session s, gv$sqlarea a
+where s.sql_id = a.sql_id 
+and a.INST_ID = s.INST_ID
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+order by 1;
+
+---
+---linuxte oracle processlerin cpu tüketimi
+ps aux | awk 'BEGIN { sum=0 } /oracle/ { sum=sum+$3 } END { print sum/8 }'
+
+
+--###################################################
+Ñ##On Linux, sessions that are not local ##
+--###################################################
+
+kill -9 `ps -ef | grep -i ora | grep LOCAL=NO |awk '{print $2}'`
+
+kill -9 `ps -ef | grep -i ora | grep j0 |awk '{print $2}'`
+
+kill -9 $(pgrep -lf "LOCAL=NO" | awk ' {print $1} ')
+
+--###################################################
+Ñ##On Linux, find the sid that you know process id##
+--###################################################
+
+select 'kill -9 '||spid from v$process where addr in 
+(
+select paddr from v$session
+where sid=131 and 
+      type!='BACKGROUND'
+) 
+
+--###################################################
+--##Linux tarafýnda modülünü bildiðin processi öldür##
+--###################################################
+
+select 'kill -9 '||spid from v$process where addr in 
+(
+select paddr from v$session
+where 
+v$session.status='ACTIVE'
+and module='MUH_SEL_OKUBASILMAMISCUZDAN_SP'
+and type!='BACKGROUND'
+) 
+
+--###############################################################################
+--##takylan session laryn linux teki OS pid ini bulup kill -9 ile oldurmek icin## 
+--# en hyzly lock resolve yontemidir.                                          ## 
+--###############################################################################
+
+select 'kill -9 '||spid from v$process where addr in 
+(
+select paddr from v$session, v$sql
+where 
+v$session.sql_id = v$sql.sql_id 
+and v$session.status='ACTIVE'
+and sql_text like 'UPDATE YET_KULLANICI%'
+and type != 'BACKGROUND' 
+) 
+
+
+
+--#########################################
+--##su anda aktif olan lockly session lar##
+--#########################################
+
+select s.sid,s.SERIAL#,s.username, s.program,s.machine, s.event,a.sql_text,s.service_name, s.module, s.action,s.last_call_et  
+from v$session s, v$sqlarea a
+where s.sql_id = a.sql_id 
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+and s.sid in (select l.SID from v$lock l)
+
+--#########################################
+--##bir user ýn sessionlarýný öldüren scr##
+--#########################################
+
+select 'alter system kill session ''' || sid || ',' || serial# || ''';'
+  from v$session s
+ where s.OSUSER = 'aturkan'
+   and s.PROGRAM = 'RunQueue.exe'
+   and s.STATUS = 'ACTIVE'
+
+
+--#########################################
+--## bir user ýn oluþturduðu lock lar######
+--#########################################
+
+select * from dba_locks l
+where exists (select * from v$session s 
+                  where s.SID=l.session_id and s.OSUSER='aturkan')
+
+
+--########################################
+--##aktif olan sessionlaryn sql planlary##
+--########################################
+
+select s.sid,s.SERIAL#,p.OPTIONS,p.OBJECT_NAME,p.OPERATION,p.ACCESS_PREDICATES,p.FILTER_PREDICATES,s.username, s.program,s.machine, s.event,a.sql_text,s.service_name, s.module, s.action,s.last_call_et  
+from v$session s, v$sqlarea a, v$sql_plan p 
+where s.sql_id = a.sql_id 
+and p.SQL_ID= a.SQL_ID
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+--and seconds_in_wait > 1
+
+
+--##################################
+--##aktif olan long session lar##
+--##################################
+
+select s.sid,s.SERIAL#,l.MESSAGE,l.SOFAR,l.TOTALWORK,l.TIME_REMAINING,l.ELAPSED_SECONDS,s.username, s.program,s.machine, s.event,a.sql_text,s.service_name, s.module, s.action,s.last_call_et  
+from v$session s, v$sqlarea a,v$session_longops l
+where s.sql_id = a.sql_id 
+and s.status='ACTIVE'
+and s.type != 'BACKGROUND'
+and l.SID=s.SID
+
+--######################################################################
+--###     databasede hangi fileda ne kadar boþ yer var   ###############
+--###pieces = bitiþik boþ block sayýsý boþ bitiþik max block sayýsý ####
+--###min bitiþik boþ block sayýsý ortalama bitiþik block sayýsý     ####
+--###############  toplam bitiþik boþ block sayýsý #####################
+--######################################################################
+
+SELECT TABLESPACE_NAME "TABLESPACE", FILE_ID,
+   COUNT(*)    "PIECES",
+   MAX(blocks) "MAXIMUM",
+   MIN(blocks) "MINIMUM",
+   AVG(blocks) "AVERAGE",
+   SUM(blocks) "TOTAL"
+   FROM DBA_FREE_SPACE
+GROUP BY TABLESPACE_NAME, FILE_ID;
+
+
+--####################################
+--###birbirini bekleten session lar###
+--####################################
+ 
+select * from dba_waiters
+
+--##############################
+--##bir objeye olan eri?imler### 
+--##############################
+
+select * from v$access a where a.OBJECT='GEN_SUBE'
+select * from v$access a where a.sid= 123
+
+--##################################
+--##bir lock olu?turan sessionlar### 
+--##################################
+
+select * from v$lock
+
+--##############################################################
+--##sid sini bildigin session yn calistirdigi sql in full text##
+--############################################################## 
+
+select tx.sql_text from v$sqltext tx, v$session s 
+where s.sql_address = tx.address and s.sql_hash_value = tx.hash_value 
+and s.sid =197 order by tx.piece;
+
+
+--############################################################ 
+--##process idsini bildi?in bir processin session idsini bul##
+--############################################################
+
+select sid from v$session
+where paddr = (select addr from v$process where spid = 25936)
+
+--##############################################################
+--##session idsini bildi?in sessionyn kill cümlesini olu?tur####
+--##############################################################
+ 
+select 'kill -9 '||spid  from v$process where 
+addr in (select paddr from v$session where sid in (1109))
+
+
+set linesize 120
+set pagesize 2000
+select t.* from v$session s,
+table(dbms_xplan.display_cursor(s.sql_id, s.SQL_CHILD_NUMBER)) t
+where s.sid=397
+
+--# segment statistics ile ilgili
+
+select name, sum(....
+
+
+select 'alter system kill session '''||SID||','||SERIAL#||''';' from v$session, v$sql
+where 
+v$session.sql_id = v$sql.sql_id 
+and v$session.status='ACTIVE'
+and sql_text like 'SELECT %'
+and type != 'BACKGROUND'
+
+
+--# herhangi bir cümlenin hash_value sunu almak icin 
+select hash_value from v$sqlarea where sql_text like 'select count(*) from finartprod.muh_hareketdetay%' 
+
+--# hash value sunu bildigin sql in gercek execution plany
+select distinct id, parent_id, lpad (' ', depth) || operation operation, 
+options, object_name, cost 
+from v$sql_plan 
+where hash_value = 198579175
+order by id;
+
+
+--##Bir tablespace'de su an kullanilan alan miktari için  
+select sum(bytes)/1024/1024/1024 from dba_segments
+where tablespace_name='FINARTDATA';
+
+select sum(bytes)/1024/1024/1024 from dba_segments
+where segment_name='BKR_ODEME_PLANI';
+
+
+--##Bir tablespace'e ait toplam data file size'ini ögrenmek için
+select sum(bytes)/1024/1024/1024 from dba_data_files
+where tablespace_name='FINARTDATA';
+
+--tablespace free space
+
+select sum(bytes)/1024/1024/1024 from dba_free_space d
+where tablespace_name='FINARTDATA';
+
+--##Temp tablespace'de kalan yer bilgisi için
+select TABLESPACE_NAME, TOTAL_BLOCKS, USED_BLOCKS, MAX_USED_BLOCKS, MAX_SORT_BLOCKS, FREE_BLOCKS 
+from V$SORT_SEGMENT; 
+
+--# temp tablespace in rac.
+select inst_id, tablespace_name, total_blocks, used_blocks, free_blocks   from gv$sort_segment
+
+--hangi session ne kadar temp alan kullaniyor
+
+select s.SID,t.blocks,t.* from v$tempseg_usage t,v$session s
+where s.SADDR = t.SESSION_ADDR and
+      s.STATUS = 'ACTIVE'
+order by t.blocks desc;
+
+
+---##job loglarina bakmak için
+select * from dba_scheduler_job_log
+where job_name like 'BKR_BAT%'
+and status = 'FAILED'
+order by log_date
+
+
+--##v$session_longops view'y  bir query'nin ortamlama süresini bulmak için
+  select * from v$session_longops where totalwork<> sofar
+
+
+--##Bir instance'da kill edilecek'ler için script
+
+	select 'kill -9 '||spid,sid from v$process,v$session where 
+	v$process.addr = v$session.paddr
+	and addr in 
+	(
+	select paddr from  v$session, v$sqlarea
+	where v$session.sql_id = v$sqlarea.sql_id 
+	and v$session.status='ACTIVE'
+	--and sql_text like 'INSERT %'
+	--and sid in (183,264)
+	--and username = 'FINARTYTL'
+	--and machine = 'FTROOT\YAZILIM-Z5B1DF8'
+	--and event = 'db file scattered read'
+	--and type != 'BACKGROUND'
+	) 
+
+
+---## Bir gün için üretilen archive log size'yny bulmak için
+select sum(blocks*block_size)/1024/1024/1024 bytes from v$archived_log
+where completion_time > sysdate  -1;
+
+--###################################################
+--###### v$sql_plan'dan sorgu çekmeden önce  ########
+--###################################################
+
+alter session set "_cursor_plan_unparse_enabled"=false;
+
+select * from v$sql_plan 
+where sql_id='gus06w13q6kvf';
+
+--###################################################
+--########remote dependencies mode'u deðiþtir########
+--###################################################
+
+alter system set remote_dependencies_mode=timestamp
+
+
+-----------------------------------------------------
+-------- lock olan sessionlarin tespiti -------------
+-----------------------------------------------------
+--herhangi bir lock için bekleyen tüm sessionlar
+select event,p1,p2,p3 from v$session_wait
+  where wait_time = 0 and event='enqueue';
+  
+--TX lockdan dolayi bekleyen sessionlar
+select * from v$lock 
+where type='TX' and request > 0;
+
+--TX lock yapip bekleten sessionlar
+select * from v$lock 
+where type='TX' and lmode > 0;
+
+-- lock types
+
+select * from v$lock_type
+
+
+--secure copy
+scp <kopyalanacak_dosya> user@ip:path 
+
+--secure shell
+
+ssh ip --ssh 10.75.6.38
+
+-- pmon çalisiyor mu
+ps -ef | grep pmon
+
+------------------------------------------------------
+----------------- set log archive dest ---------------
+------------------------------------------------------
+
+alter system set log_archive_dest_1='LOCATION=/oradisk/report01/FRP/archive';
+
+--datafile'in auto extend özelligini kaldir
+--tablespace bazinda yapamiyoruz.
+
+alter database datafile '/oradisk/oradata1/FADB/users01.dbf' autoextend off;
+
+--failed login attempts
+select name,lcount from user$ where name='<USERNAME>';
+
+--autotrace explain
+set autotrace traceonly explain
+
+--------------------------------------------------------
+--------------------- flashcak query -------------------
+--------------------------------------------------------
+--as of timestamp
+SELECT salary FROM employees
+   AS OF TIMESTAMP (SYSTIMESTAMP - INTERVAL '1' DAY)
+   WHERE last_name = 'Chung';
+   
+SELECT salary FROM employees
+  VERSIONS BETWEEN TIMESTAMP
+    SYSTIMESTAMP - INTERVAL '10' MINUTE AND
+    SYSTIMESTAMP - INTERVAL '1' MINUTE
+  WHERE last_name = 'Chung';
+
+
+SELECT owner, table_name, tablespace_name
+FROM uwclass.t
+AS OF TIMESTAMP TO_TIMESTAMP('02-MAY-07 10.55.40.000000');
+
+--as of scn
+SELECT owner, table_name, tablespace_name
+FROM uwclass.t
+AS OF SCN 5604684;
+
+
+
+
+
+
+

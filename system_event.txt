@@ -1,0 +1,129 @@
+############################## online ##############################
+
+select e.WAIT_CLASS,s.*
+  from v$system_event s, v$event_name e
+ where s.EVENT_ID=e.event_id and e.WAIT_CLASS != 'Idle'
+ order by time_waited desc;
+
+######################## ilk 6 event online ########################
+
+select *
+  from (select s.INST_ID,
+               ROW_NUMBER() OVER(PARTITION BY s.INST_ID ORDER BY s.time_waited desc) rn,
+               e.WAIT_CLASS,
+               e.name,
+               s.total_timeouts,
+               s.total_waits,
+               s.time_waited,
+               (s.time_waited/s.total_waits) avg_wait_ms 
+          from gv$system_event s, v$event_name e
+         where s.EVENT_ID = e.event_id
+           and e.WAIT_CLASS != 'Idle')
+ where rn <= 6
+ order by INST_ID,rn;
+
+######################## ilk 6 delta event online ########################
+
+set lines 300
+set pages 100
+col wait_class format a20
+col inst_id format 99
+col rn format 99
+col event_name format a35
+col BEGIN_INTERVAL_TIME format a30
+
+select *
+  from (select t.instance_number inst_id,
+               e.snap_id,
+               ROW_NUMBER() OVER(PARTITION BY t.instance_number ORDER BY (s.time_waited_micro - t.time_waited_micro) desc) rn,
+               e.begin_interval_time,
+               t.WAIT_CLASS,
+               t.event_name,               
+               (s.total_timeouts - t.total_timeouts) delta_timeouts,
+               (s.total_waits - t.total_waits) delta_waits,
+               (s.time_waited_micro - t.time_waited_micro) delta_time_micro,
+	       (s.time_waited_micro - t.time_waited_micro)/decode((s.total_waits - t.total_waits),0,-1,(s.total_waits - t.total_waits))/1000 avg_wait_ms	
+          from gv$system_event s,
+               dba_hist_system_event t,
+               dba_hist_snapshot     e
+         where t.snap_id = e.snap_id
+           and t.WAIT_CLASS != 'Idle'
+           and t.snap_id =(select max(snap_id) from dba_hist_snapshot)
+           and s.EVENT_ID =t.event_id
+           and s.INST_ID = t.instance_number
+           and (s.time_waited_micro - t.time_waited_micro) > 0
+           and e.instance_number = t.instance_number
+           and t.event_name!='i/o slave wait')
+ where rn <= 6
+ order by inst_id,snap_id desc, rn;
+
+
+############################## history ##############################
+
+select e.instance_number,
+       e.begin_interval_time,
+       s.WAIT_CLASS,
+       s.event_name,
+       --CUME_DIST() OVER (PARTITION BY s.snap_id ORDER BY s.time_waited_micro) AS cume_dist,
+       s.total_timeouts,
+       s.total_waits,
+       s.time_waited_micro
+  from dba_hist_system_event s, dba_hist_snapshot e
+ where s.snap_id = e.snap_id
+   and s.WAIT_CLASS != 'Idle'
+   and s.instance_number=e.instance_number
+   and s.snap_id = 48745
+ order by s.instance_number, s.time_waited_micro desc;
+
+
+########################## ilk 6 event history ######################
+
+select *
+  from (select e.instance_number,
+               e.snap_id,
+               ROW_NUMBER() OVER(PARTITION BY s.instance_number,s.snap_id ORDER BY s.time_waited_micro desc) rn,
+               e.begin_interval_time,
+               s.WAIT_CLASS,
+               s.event_name,
+               s.total_timeouts,
+               s.total_waits,
+               s.time_waited_micro
+          from dba_hist_system_event s, dba_hist_snapshot e
+         where s.snap_id = e.snap_id
+           and s.WAIT_CLASS != 'Idle'
+           and s.instance_number = e.instance_number
+           and s.snap_id > 48744           
+        )
+ where rn <= 6
+ order by instance_number,snap_id desc, rn
+
+########################## ilk 6 delta event history ######################
+
+select *
+  from (select e.instance_number inst_id,
+               e.snap_id,
+               ROW_NUMBER() OVER(PARTITION BY s.instance_number,s.snap_id ORDER BY (s.time_waited_micro - t.time_waited_micro) desc) rn,
+               e.begin_interval_time,
+               s.WAIT_CLASS,
+               s.event_name,
+               (s.total_timeouts - t.total_timeouts) delta_timeouts,
+               (s.total_waits - t.total_waits) delta_waits,
+               (s.time_waited_micro - t.time_waited_micro) delta_time_waited_micro,
+               (s.time_waited_micro - t.time_waited_micro)/decode((s.total_waits - t.total_waits),0,-1,(s.total_waits - t.total_waits))/1000 avg_wait_ms
+          from dba_hist_system_event s,
+               dba_hist_system_event t,
+               dba_hist_snapshot     e
+         where t.snap_id = e.snap_id
+           and s.WAIT_CLASS != 'Idle'
+           and s.snap_id = t.snap_id + 1
+           and s.EVENT_ID =t.event_id
+           and s.instance_number = t.instance_number
+           and e.instance_number = t.instance_number
+           and (s.time_waited_micro - t.time_waited_micro) > 0
+           and s.snap_id >= 92355
+           and t.event_name!='i/o slave wait'
+           --and s.event_name = 'cursor: pin S wait on X'
+           --and s.event_name='log file sync'
+  )
+ where rn <= 6
+ order by inst_id,snap_id desc, rn;
